@@ -346,8 +346,147 @@ const getInvestors = async (req, res) => {
   }
 };
 
+/**
+ * Delete User - Delete a user (investor, seller, or admin) and all linked data
+ * This will delete:
+ * - User record
+ * - User roles
+ * - OTPs
+ * - Company profiles (for sellers)
+ * - Investor profiles (for investors)
+ * - Institutional profiles (for investors)
+ * - All references in verified_by, assigned_by, granted_by fields
+ */
+const deleteUser = async (req, res) => {
+  try {
+    const { userId, userType } = req.body;
+
+    // Validate required fields
+    if (!userId) {
+      return res.status(400).json({ 
+        error: 'userId is required' 
+      });
+    }
+
+    if (!userType) {
+      return res.status(400).json({ 
+        error: 'userType is required. Must be one of: investor, seller, admin' 
+      });
+    }
+
+    // Validate userType
+    const validUserTypes = ['investor', 'seller', 'admin'];
+    if (!validUserTypes.includes(userType.toLowerCase())) {
+      return res.status(400).json({ 
+        error: 'Invalid userType. Must be one of: investor, seller, admin' 
+      });
+    }
+
+    // Check if user exists
+    const userResult = await pool.query(
+      'SELECT id, email, full_name FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Verify user has the expected role (optional validation)
+    const userRolesResult = await pool.query(
+      `SELECT r.name 
+       FROM user_roles ur
+       JOIN roles r ON ur.role_id = r.id
+       WHERE ur.user_id = $1`,
+      [userId]
+    );
+
+    const userRoles = userRolesResult.rows.map(row => row.name);
+    const expectedRole = userType.toLowerCase();
+
+    // Warn if user doesn't have the expected role, but proceed anyway
+    if (!userRoles.includes(expectedRole)) {
+      console.warn(`User ${userId} does not have ${expectedRole} role. Current roles: ${userRoles.join(', ')}`);
+    }
+
+    // Start transaction
+    await pool.query('BEGIN');
+
+    try {
+      // Step 1: Set verified_by, assigned_by, granted_by to NULL where they reference this user
+      // This prevents foreign key constraint violations
+      
+      // Update company_profiles.verified_by
+      await pool.query(
+        'UPDATE company_profiles SET verified_by = NULL WHERE verified_by = $1',
+        [userId]
+      );
+
+      // Update investor_profiles.verified_by
+      await pool.query(
+        'UPDATE investor_profiles SET verified_by = NULL WHERE verified_by = $1',
+        [userId]
+      );
+
+      // Update institutional_profiles.verified_by
+      await pool.query(
+        'UPDATE institutional_profiles SET verified_by = NULL WHERE verified_by = $1',
+        [userId]
+      );
+
+      // Update user_roles.assigned_by
+      await pool.query(
+        'UPDATE user_roles SET assigned_by = NULL WHERE assigned_by = $1',
+        [userId]
+      );
+
+      // Update role_permissions.granted_by
+      await pool.query(
+        'UPDATE role_permissions SET granted_by = NULL WHERE granted_by = $1',
+        [userId]
+      );
+
+      // Step 2: Delete user (this will cascade delete):
+      // - user_roles (ON DELETE CASCADE)
+      // - otps (ON DELETE CASCADE)
+      // - company_profiles (ON DELETE CASCADE)
+      // - investor_profiles (ON DELETE CASCADE)
+      // - institutional_profiles (ON DELETE CASCADE)
+      const deleteResult = await pool.query(
+        'DELETE FROM users WHERE id = $1 RETURNING id, email, full_name',
+        [userId]
+      );
+
+      if (deleteResult.rows.length === 0) {
+        await pool.query('ROLLBACK');
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      await pool.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: `${userType} deleted successfully`,
+        deletedUser: {
+          id: deleteResult.rows[0].id,
+          email: deleteResult.rows[0].email,
+          fullName: deleteResult.rows[0].full_name,
+          userType: expectedRole
+        }
+      });
+    } catch (error) {
+      await pool.query('ROLLBACK');
+      throw error;
+    }
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 module.exports = {
   getUserManagement,
-  getInvestors
+  getInvestors,
+  deleteUser
 };
 
