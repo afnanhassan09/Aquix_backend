@@ -5,7 +5,7 @@ const { Client } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 // CONFIGURATION
-const FILE_PATH = "C:/Users/hassa/Downloads/2. Standard Version dataset_Jay's inputs_60 dataset.xlsx";
+const FILE_PATH = "C:/Users/hassa/Downloads/3. Enterprise Version dataset_60 dataset_V2.xlsx";
 const SHEET_NAME = "Reference Data sheet";
 
 /**
@@ -14,14 +14,14 @@ const SHEET_NAME = "Reference Data sheet";
 function extractTable(rawData, headerKeyword, columnMapping) {
     // 1. Find the start row STRICTLY
     let startRowIndex = -1;
-    
+
     for (let i = 0; i < rawData.length; i++) {
         const row = rawData[i];
         if (!row || !Array.isArray(row)) continue;
 
         // FIX 1: Strict Search. Check if any CELL in this row equals the keyword.
         // We use 'some' to check specific cells rather than stringifying the whole row.
-        const foundHeader = row.some(cell => 
+        const foundHeader = row.some(cell =>
             cell && cell.toString().trim().toLowerCase() === headerKeyword.toLowerCase()
         );
 
@@ -45,7 +45,7 @@ function extractTable(rawData, headerKeyword, columnMapping) {
         if (cellValue && columnMapping[cellValue]) {
             mapIndices[columnMapping[cellValue]] = index;
             // Capture the first mapped column index to use as a "row exists" check later
-            if (primaryColIndex === -1) primaryColIndex = index; 
+            if (primaryColIndex === -1) primaryColIndex = index;
         }
     });
 
@@ -76,11 +76,11 @@ function extractTable(rawData, headerKeyword, columnMapping) {
             // FIX 3: Strict Numeric Cleaning & Garbage Filtering
             if (typeof val === 'string') {
                 val = val.trim();
-                
+
                 // If we hit the "..." or "…" placeholders commonly found in templates
                 if (val.includes('…') || val.includes('...')) {
-                    isValidRow = false; 
-                    break; 
+                    isValidRow = false;
+                    break;
                 }
 
                 // Remove commas for currency
@@ -119,7 +119,7 @@ async function insertData(client, tableName, data) {
     for (const row of data) {
         const values = keys.map(k => row[k]);
         const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
-        
+
         // Using ON CONFLICT DO UPDATE/NOTHING based on your needs. 
         // NOTHING is safer for seed files to avoid duplicates.
         const query = `INSERT INTO ${tableName} (${cols}) VALUES (${placeholders}) 

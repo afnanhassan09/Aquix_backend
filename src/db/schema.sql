@@ -218,7 +218,8 @@ CREATE TABLE constant_sector_metrics (
     base_ebit_multiple DECIMAL(10, 2),    -- e.g., 17.50
     target_ebit_margin_pct DECIMAL(5, 2), -- e.g., 32.50
     target_cagr_pct DECIMAL(5, 2),        -- e.g., 17.50
-    band_min DECIMAL(10, 2)               -- e.g., 10.00
+    band_min DECIMAL(10, 2),              -- e.g., 10.00
+    score INT                             -- MISSING IN YOUR CODE: e.g., 85, 82
 );
 
 CREATE TABLE constant_country_adjustments (
@@ -253,19 +254,20 @@ CREATE TABLE constant_credit_ratings (
 
 CREATE TABLE company_valuation_models (
     id SERIAL PRIMARY KEY,
-    
+
     -- 1. IDENTIFICATION
     company_name VARCHAR(255) NOT NULL,
-    sector VARCHAR(100),            -- e.g., 'Consumer Electronics Brands'
-    country_code CHAR(2),           -- e.g., 'US'
-    currency_code CHAR(3),          -- e.g., 'USD'
-    employees INT,                  -- e.g., 161000
-    
-    -- 2. HISTORICAL FINANCIALS (Y1=Last Year, Y3=3 Years Ago)
-    revenue_y1 BIGINT,              -- 394,328,000,000
+    sector VARCHAR(100),                -- Maps to 'Sector' (e.g. 'Consumer Electronics Brands')
+    country_code CHAR(2),               -- Maps to 'Country'
+    currency_code CHAR(3),              -- Maps to 'Currency'
+    valuation_date DATE,                -- ADDED: Maps to 'Val Date'
+    employees INT,                      -- Maps to 'Employees'
+
+    -- 2. HISTORICAL FINANCIALS (Y1=Last Year)
+    revenue_y1 BIGINT,
     revenue_y2 BIGINT,
     revenue_y3 BIGINT,
-    ebit_y1 BIGINT,                 -- 114,301,000,000
+    ebit_y1 BIGINT,
     ebit_y2 BIGINT,
     ebit_y3 BIGINT,
 
@@ -277,36 +279,65 @@ CREATE TABLE company_valuation_models (
     ebit_f2 BIGINT,
     ebit_f3 BIGINT,
 
-    -- 4. RISK & OPERATIONS INPUTS
-    top3_concentration_pct DECIMAL(5, 2), -- 25.00
-    founder_dependency_high BOOLEAN,      -- 'No' -> FALSE
-    supplier_dependency_high BOOLEAN,     -- 'No' -> FALSE
-    key_staff_retention_plan BOOLEAN,     -- 'Yes' -> TRUE
-    documentation_readiness VARCHAR(50),  -- 'Full', 'Partial'
-    seller_flexibility VARCHAR(50),       -- 'High', 'Medium', 'Low'
-    target_timeline_months INT,           -- 3
+    -- 4. FINANCIAL HEALTH & CAPITAL STRUCTURE (NEW SECTION)
+    total_debt BIGINT,                  -- ADDED
+    current_assets BIGINT,              -- ADDED
+    current_liabilities BIGINT,         -- ADDED
+    credit_rating VARCHAR(10),          -- ADDED: Maps to 'Credit Rating'
+    ownership_pct DECIMAL(5, 2),        -- ADDED: Maps to 'Ownership %'
+    mgmt_turnover_pct DECIMAL(5, 2),    -- ADDED: Maps to 'Mgmt Turnover %'
+    litigation_active BOOLEAN,          -- ADDED: Maps to 'Litigation?'
 
-    -- 5. BACKEND HELPERS & CALCULATED LOOKUPS
-    -- Storing these allows you to "freeze" a valuation version
-    calc_fx_rate DECIMAL(10, 4),          -- 0.93
-    calc_rev_avg_eur BIGINT,              -- 320,744,600,000
-    calc_ebit_avg_eur BIGINT,
-    calc_ebit_margin_pct DECIMAL(10, 2),  -- 27.98
-    calc_ebit_cagr_pct DECIMAL(10, 2),    -- -23.85
-    calc_volatility_pct DECIMAL(10, 2),   -- 27.26
-    calc_rev_cagr_pct DECIMAL(10, 2),     -- -16.56
-    
-    -- 6. VALUATION FACTORS
-    factor_base_multiple DECIMAL(5, 2),   -- 11.00
-    factor_country_risk DECIMAL(5, 2),    -- 0.20
-    factor_size_adj DECIMAL(5, 2),        -- 0.60
-    factor_conc_adj DECIMAL(5, 2),        -- 0.00
-    factor_adj_multiple DECIMAL(5, 2),    -- 11.80
-    
-    -- 7. FINAL OUTPUTS
-    val_ev_low_eur VARCHAR(50),           -- "74,606k EUR"
-    val_ev_mid_eur VARCHAR(50),           -- "87,772k EUR"
-    val_ev_high_eur VARCHAR(50),          -- "100,938k EUR"
+    -- 5. RISK & OPERATIONS INPUTS
+    top3_concentration_pct DECIMAL(5, 2),
+    founder_dependency_high BOOLEAN,    -- Maps to 'Founder dep?'
+    supplier_dependency_high BOOLEAN,   -- Maps to 'Supplier dep?'
+    key_staff_retention_plan BOOLEAN,   -- Maps to 'Staff plan?'
+    financials_audited BOOLEAN,         -- ADDED: Maps to 'Audited?'
+    documentation_readiness VARCHAR(50),
+    seller_flexibility VARCHAR(50),     -- Maps to 'Flexibility?'
+    target_timeline_months INT,         -- Maps to 'Timeline'
+
+    -- 6. BACKEND HELPERS & CALCULATED LOOKUPS
+    calc_fx_rate DECIMAL(10, 4),
+    calc_rev_avg_eur BIGINT,            -- Maps to 'Rev AVG - Historical'
+    calc_ebit_avg_eur BIGINT,           -- Maps to 'EBIT AVG - Historical'
+    calc_ebit_margin_pct DECIMAL(10, 2),
+    calc_ebit_cagr_pct DECIMAL(10, 2),
+    calc_volatility_pct DECIMAL(10, 2),
+    calc_rev_cagr_pct DECIMAL(10, 2),
+    calc_debt_ebitda_ratio DECIMAL(10, 2), -- ADDED: Maps to 'Debt/EBITDA'
+    calc_current_ratio DECIMAL(10, 2),     -- ADDED: Maps to 'Current Ratio'
+
+    -- 7. VALUATION FACTORS
+    factor_base_multiple DECIMAL(5, 2),
+    factor_country_risk DECIMAL(5, 2),
+    factor_size_adj DECIMAL(5, 2),
+    factor_conc_adj DECIMAL(5, 2),      -- Maps to 'Customer Concentration Adjustment'
+    factor_adj_multiple DECIMAL(5, 2),
+
+    -- 8. FINAL OUTPUTS
+    val_norm_ebit_eur BIGINT,           -- ADDED: Maps to 'Norm EBIT'
+    val_ev_low_eur VARCHAR(50),         -- Kept as VARCHAR to match '74,606k EUR' format
+    val_ev_mid_eur VARCHAR(50),
+    val_ev_high_eur VARCHAR(50),
+
+    -- 9. ADDITIONAL SCORING & METRICS
+    financial_strength INT,
+    risk_management INT,
+    market_context INT,
+    dealability_size_subscore INT,
+    dealability_documentation_subscore INT,
+    dealability_flexibility_subscore INT,
+    dealability_timeline_subscore INT,
+    dealability_score INT,
+    valuation_reliability VARCHAR(50),
+    fx_confidence VARCHAR(50),
+    peer_gap_pct DECIMAL(5, 2),
+    age_warning VARCHAR(255),
+    inst_bonus DECIMAL(5, 2),
+    risk_flags TEXT,
+    tapway_institutional_score INT,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
