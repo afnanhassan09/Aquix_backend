@@ -42,8 +42,20 @@ function extractTable(rawData, headerKeyword, columnMapping) {
     let primaryColIndex = -1; // To track the main column for the 'break' check
 
     headerRow.forEach((cellValue, index) => {
-        if (cellValue && columnMapping[cellValue]) {
-            mapIndices[columnMapping[cellValue]] = index;
+        if (!cellValue) return;
+
+        // Clean the header string (trim spaces) and lowercase for comparison
+        const headerStr = cellValue.toString().trim();
+        const headerLower = headerStr.toLowerCase();
+
+        // Find if this header matches any key in columnMapping (case-insensitive)
+        const matchedKey = Object.keys(columnMapping).find(
+            k => k.toLowerCase() === headerLower
+        );
+
+        if (matchedKey) {
+            const sqlCol = columnMapping[matchedKey];
+            mapIndices[sqlCol] = index;
             // Capture the first mapped column index to use as a "row exists" check later
             if (primaryColIndex === -1) primaryColIndex = index;
         }
@@ -167,7 +179,8 @@ async function runSeed() {
         "Base_EBIT_Multiple": "base_ebit_multiple",
         "Target_EBIT_Margin_%": "target_ebit_margin_pct",
         "Target_CAGR_%": "target_cagr_pct",
-        "BandMin": "band_min"
+        "BandMin": "band_min",
+        "Score": "score"
     });
 
     const countries = extractTable(rawData, "CountryCode", {

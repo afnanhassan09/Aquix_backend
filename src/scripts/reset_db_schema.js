@@ -14,7 +14,8 @@ async function resetSchema() {
         // 1. Drop existing valuation & constant tables
         console.log("Dropping relevant tables...");
         const dropQuery = `
-            DROP TABLE IF EXISTS company_valuation_models CASCADE;
+            DROP TABLE IF EXISTS company_enterprise_valuation_models CASCADE;
+            DROP TABLE IF EXISTS company_standard_valuation_models CASCADE;
             DROP TABLE IF EXISTS constant_sector_metrics CASCADE;
             DROP TABLE IF EXISTS constant_country_adjustments CASCADE;
             DROP TABLE IF EXISTS constant_size_adjustments CASCADE;

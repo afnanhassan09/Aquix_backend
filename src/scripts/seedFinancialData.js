@@ -3,7 +3,7 @@ const path = require('path');
 const { Pool } = require('pg');
 
 // Configure your database connection
-const connectionString = 'postgresql://neondb_owner:npg_dv5xH2VfFAgJ@ep-floral-surf-a4a6j6xp-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require';
+const connectionString = 'postgresql://neondb_owner:npg_8M7FuxlWGsBi@ep-tiny-moon-ai15nmho-pooler.c-4.us-east-1.aws.neon.tech/neondb?sslmode=require';
 
 const pool = new Pool({
     connectionString,

@@ -254,7 +254,7 @@ CREATE TRIGGER update_institutional_profiles_updated_at BEFORE UPDATE ON institu
 -- Constant Reference Tables
 -- ============================================
 
-CREATE TABLE constant_sector_metrics (
+CREATE TABLE IF NOT EXISTS constant_sector_metrics (
     subsector_id VARCHAR(50) PRIMARY KEY,
     sector_id VARCHAR(20),
     sector_en VARCHAR(100),
@@ -269,37 +269,37 @@ CREATE TABLE constant_sector_metrics (
     score INT                             -- MISSING IN YOUR CODE: e.g., 85, 82
 );
 
-CREATE TABLE constant_country_adjustments (
+CREATE TABLE IF NOT EXISTS constant_country_adjustments (
     country_code CHAR(2) PRIMARY KEY, -- e.g., 'US', 'DE'
     delta_multiple DECIMAL(5, 2)      -- e.g., 0.20, -0.30
 );
 
-CREATE TABLE constant_size_adjustments (
+CREATE TABLE IF NOT EXISTS constant_size_adjustments (
     rev_min_eur BIGINT PRIMARY KEY,  -- Using BIGINT for large currency numbers
     delta_multiple DECIMAL(5, 2)     -- e.g., -0.50, 0.60
 );
 
-CREATE TABLE constant_concentration_adjustments (
+CREATE TABLE IF NOT EXISTS constant_concentration_adjustments (
     top3_min_pct INT PRIMARY KEY,    -- e.g., 30, 45
     delta_multiple DECIMAL(5, 2)     -- e.g., -0.30, 0.10
 );
 
-CREATE TABLE constant_fx_rates (
+CREATE TABLE IF NOT EXISTS constant_fx_rates (
     currency_code CHAR(3) PRIMARY KEY, -- e.g., 'USD', 'GBP'
     rate_to_eur DECIMAL(10, 4)         -- e.g., 1.1700 (4 decimals for precision)
 );
 
-CREATE TABLE constant_deal_size_scores (
+CREATE TABLE IF NOT EXISTS constant_deal_size_scores (
     ev_min_eur BIGINT PRIMARY KEY,
     size_score INT                     -- e.g., 40, 60, 95
 );
 
-CREATE TABLE constant_credit_ratings (
+CREATE TABLE IF NOT EXISTS constant_credit_ratings (
     rating VARCHAR(10) PRIMARY KEY,   -- e.g., 'AAA', 'BBB-'
     score INT                         -- e.g., 98, 84
 );
 
-CREATE TABLE company_valuation_models (
+CREATE TABLE IF NOT EXISTS company_enterprise_valuation_models (
     id SERIAL PRIMARY KEY,
 
     -- 1. IDENTIFICATION
@@ -385,6 +385,80 @@ CREATE TABLE company_valuation_models (
     inst_bonus DECIMAL(5, 2),
     risk_flags TEXT,
     tapway_institutional_score INT,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS company_standard_valuation_models (
+    id SERIAL PRIMARY KEY,
+
+    -- 1. IDENTIFICATION
+    company_name VARCHAR(255) NOT NULL,
+    sector VARCHAR(100),
+    country_code CHAR(2),
+    currency_code CHAR(3),
+    employees INT,
+
+    -- 2. HISTORICAL FINANCIALS
+    revenue_y1 BIGINT,
+    revenue_y2 BIGINT,
+    revenue_y3 BIGINT,
+    ebit_y1 BIGINT,
+    ebit_y2 BIGINT,
+    ebit_y3 BIGINT,
+
+    -- 3. FORECAST FINANCIALS
+    revenue_f1 BIGINT,
+    revenue_f2 BIGINT,
+    revenue_f3 BIGINT,
+    ebit_f1 BIGINT,
+    ebit_f2 BIGINT,
+    ebit_f3 BIGINT,
+
+    -- 4. RISK & OPERATIONS INPUTS
+    top3_concentration_pct DECIMAL(5, 2),
+    founder_dependency_high BOOLEAN,
+    supplier_dependency_high BOOLEAN,
+    key_staff_retention_plan BOOLEAN,
+    documentation_readiness VARCHAR(50),
+    seller_flexibility VARCHAR(50),
+    target_timeline_months INT,
+
+    -- 5. BACKEND HELPERS & CALCULATED LOOKUPS
+    calc_fx_rate DECIMAL(10, 4),
+    calc_rev_avg_eur BIGINT,
+    calc_ebit_avg_eur BIGINT,
+    calc_ebit_margin_pct DECIMAL(10, 2),
+    calc_ebit_cagr_pct DECIMAL(10, 2),
+    calc_volatility_pct DECIMAL(10, 2),
+    calc_rev_cagr_pct DECIMAL(10, 2),
+
+    factor_base_multiple DECIMAL(5, 2),
+    factor_country_risk DECIMAL(5, 2),
+    factor_size_adj DECIMAL(5, 2),
+    factor_conc_adj DECIMAL(5, 2),
+    factor_adj_multiple DECIMAL(5, 2),
+
+    val_ev_low_eur VARCHAR(50),
+    val_ev_mid_eur VARCHAR(50),
+    val_ev_high_eur VARCHAR(50),
+
+    -- 6. SCORING & METRICS
+    financial_strength INT,          -- "Financial Quality"
+    growth_score INT,                -- NEW
+    risk_management INT,
+    data_completeness INT,           -- NEW
+    sector_context INT,              -- NEW
+    investment_attractiveness INT,   -- NEW: Aggregation
+
+    dealability_size_subscore INT,
+    dealability_documentation_subscore INT,
+    dealability_flexibility_subscore INT,
+    dealability_timeline_subscore INT,
+    dealability_score INT,
+
+    risk_flags TEXT,
+    tapway_score INT,                -- "TAPWAY SCORE"
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -89,7 +89,7 @@ async function calculateMetrics(pool, data) {
     let calc_fx_rate = 1.0;
     if (currency_code) {
         const fxResult = await pool.query(
-            'SELECT rate_to_eur FROM constant_fx_rates WHERE currency_code = $1',
+            'SELECT rate_to_eur FROM constant_fx_rates WHERE TRIM(LOWER(currency_code)) = TRIM(LOWER($1))',
             [currency_code]
         );
         if (fxResult.rows.length > 0) {
@@ -175,7 +175,7 @@ async function calculateMetrics(pool, data) {
 
     if (sector) {
         const sectorResult = await pool.query(
-            'SELECT base_ebit_multiple, target_ebit_margin_pct, target_cagr_pct FROM constant_sector_metrics WHERE subsector_name_updated = $1',
+            'SELECT base_ebit_multiple, target_ebit_margin_pct, target_cagr_pct FROM constant_sector_metrics WHERE TRIM(LOWER(subsector_name_updated)) = TRIM(LOWER($1))',
             [sector]
         );
         if (sectorResult.rows.length > 0) {
@@ -191,7 +191,7 @@ async function calculateMetrics(pool, data) {
     let factor_country_risk = 0.0;
     if (country_code) {
         const countryResult = await pool.query(
-            'SELECT delta_multiple FROM constant_country_adjustments WHERE country_code = $1',
+            'SELECT delta_multiple FROM constant_country_adjustments WHERE TRIM(LOWER(country_code)) = TRIM(LOWER($1))',
             [country_code]
         );
         if (countryResult.rows.length > 0) {
@@ -471,7 +471,7 @@ async function calculateMetrics(pool, data) {
         // If `calc_volatility_pct` is 5.5, the score is 94.5.
         // So I will use `100 - calc_volatility_pct`.
 
-        const s_vol = Math.max(0, 100 - calc_volatility_pct* 100);
+        const s_vol = Math.max(0, 100 - calc_volatility_pct * 100);
         console.log("Volatility Score:", s_vol);
         // Part 2: Audited (40%)
         const s_audit = financials_audited === true ? 100 : 70;
@@ -485,7 +485,7 @@ async function calculateMetrics(pool, data) {
             if (valDate < cutoffDate) {
                 s_date = 70;
             }
-        } 
+        }
 
         const raw_reliability = (0.4 * s_vol) + (0.4 * s_audit) + (0.2 * s_date);
         valuation_reliability = Math.round(raw_reliability);
@@ -671,7 +671,7 @@ router.post('/', async (req, res) => {
 
 
         const query = `
-            INSERT INTO company_valuation_models (
+            INSERT INTO company_enterprise_valuation_models (
                 company_name, sector, country_code, currency_code, valuation_date, employees,
                 revenue_y1, revenue_y2, revenue_y3,
                 ebit_y1, ebit_y2, ebit_y3,
@@ -756,7 +756,83 @@ router.post('/', async (req, res) => {
 
 
         const result = await pool.query(query, values);
-        res.status(201).json(result.rows[0]);
+        const savedData = result.rows[0];
+
+        // Construct the desired nested response format
+        const responsePayload = {
+            input: {
+                company_name: savedData.company_name,
+                sector: savedData.sector,
+                country_code: savedData.country_code,
+                currency_code: savedData.currency_code,
+                valuation_date: savedData.valuation_date,
+                employees: savedData.employees,
+                revenue_y1: savedData.revenue_y1,
+                revenue_y2: savedData.revenue_y2,
+                revenue_y3: savedData.revenue_y3,
+                ebit_y1: savedData.ebit_y1,
+                ebit_y2: savedData.ebit_y2,
+                ebit_y3: savedData.ebit_y3,
+                revenue_f1: savedData.revenue_f1,
+                revenue_f2: savedData.revenue_f2,
+                revenue_f3: savedData.revenue_f3,
+                ebit_f1: savedData.ebit_f1,
+                ebit_f2: savedData.ebit_f2,
+                ebit_f3: savedData.ebit_f3,
+                total_debt: savedData.total_debt,
+                current_assets: savedData.current_assets,
+                current_liabilities: savedData.current_liabilities,
+                credit_rating: savedData.credit_rating,
+                ownership_pct: savedData.ownership_pct,
+                mgmt_turnover_pct: savedData.mgmt_turnover_pct,
+                litigation_active: savedData.litigation_active,
+                top3_concentration_pct: savedData.top3_concentration_pct,
+                founder_dependency_high: savedData.founder_dependency_high,
+                supplier_dependency_high: savedData.supplier_dependency_high,
+                key_staff_retention_plan: savedData.key_staff_retention_plan,
+                financials_audited: savedData.financials_audited,
+                documentation_readiness: savedData.documentation_readiness,
+                seller_flexibility: savedData.seller_flexibility,
+                target_timeline_months: savedData.target_timeline_months
+            },
+            calculated_metrics: {
+                calc_fx_rate: savedData.calc_fx_rate,
+                calc_rev_avg_eur: savedData.calc_rev_avg_eur,
+                calc_ebit_avg_eur: savedData.calc_ebit_avg_eur,
+                calc_ebit_margin_pct: savedData.calc_ebit_margin_pct,
+                calc_ebit_cagr_pct: savedData.calc_ebit_cagr_pct,
+                calc_volatility_pct: savedData.calc_volatility_pct,
+                calc_rev_cagr_pct: savedData.calc_rev_cagr_pct,
+                factor_base_multiple: savedData.factor_base_multiple,
+                factor_country_risk: savedData.factor_country_risk,
+                factor_size_adj: savedData.factor_size_adj,
+                factor_conc_adj: savedData.factor_conc_adj,
+                factor_adj_multiple: savedData.factor_adj_multiple,
+                val_ev_low_eur: savedData.val_ev_low_eur,
+                val_ev_mid_eur: savedData.val_ev_mid_eur,
+                val_ev_high_eur: savedData.val_ev_high_eur,
+                financial_strength: savedData.financial_strength,
+                calc_debt_ebitda_ratio: savedData.calc_debt_ebitda_ratio,
+                calc_current_ratio: savedData.calc_current_ratio,
+                val_norm_ebit_eur: savedData.val_norm_ebit_eur,
+                risk_management: savedData.risk_management,
+                market_context: savedData.market_context,
+                dealability_size_subscore: savedData.dealability_size_subscore,
+                dealability_documentation_subscore: savedData.dealability_documentation_subscore,
+                dealability_flexibility_subscore: savedData.dealability_flexibility_subscore,
+                dealability_timeline_subscore: savedData.dealability_timeline_subscore,
+                dealability_score: savedData.dealability_score,
+                valuation_reliability: savedData.valuation_reliability,
+                fx_confidence: savedData.fx_confidence,
+                peer_gap_pct: savedData.peer_gap_pct,
+                age_warning: savedData.age_warning,
+                inst_bonus: savedData.inst_bonus,
+                risk_flags: savedData.risk_flags,
+                tapway_institutional_score: savedData.tapway_institutional_score
+            }
+        };
+
+        res.status(201).json(responsePayload);
 
 
     } catch (error) {
@@ -770,7 +846,7 @@ router.post('/', async (req, res) => {
 router.get('/:companyName', async (req, res) => {
     try {
         const companyName = decodeURIComponent(req.params.companyName);
-        const query = 'SELECT * FROM company_valuation_models WHERE company_name = $1';
+        const query = 'SELECT * FROM company_enterprise_valuation_models WHERE company_name = $1';
         const result = await pool.query(query, [companyName]);
 
         if (result.rows.length === 0) {

@@ -12,17 +12,15 @@ async function runMigration() {
 
     try {
         await client.connect();
-        console.log("Connected to database. Altering company_enterprise_valuation_models table...");
+        console.log("Connected to database. Renaming company_valuation_models table...");
 
         const query = `
-            ALTER TABLE company_enterprise_valuation_models
-            ALTER COLUMN val_ev_low_eur TYPE VARCHAR(50),
-            ALTER COLUMN val_ev_mid_eur TYPE VARCHAR(50),
-            ALTER COLUMN val_ev_high_eur TYPE VARCHAR(50);
+            ALTER TABLE IF EXISTS company_valuation_models 
+            RENAME TO company_enterprise_valuation_models;
         `;
 
         await client.query(query);
-        console.log("Table company_enterprise_valuation_models altered successfully.");
+        console.log("Table renamed successfully to company_enterprise_valuation_models.");
 
     } catch (err) {
         console.error("Migration failed:", err);
