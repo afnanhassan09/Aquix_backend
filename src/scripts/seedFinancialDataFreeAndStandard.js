@@ -84,7 +84,6 @@ const METRIC_ALIASES = new Map([
   ['Enterprise Value (Mid-point)', 'EV mid'],
   ['Low (Calculated)', 'EV low'],
   ['High (Calculated)', 'EV high'],
-  ['Risk Comment', 'Narrative'],
   ['Plausibility Check', 'Valuation Reliability'],
   ['Acquisition Score (0-100)', 'TAPWAY INSTITUTIONAL SCORE'],
   ['Investment Attractiveness — aggregation', 'Investment Attractiveness - aggregation'],

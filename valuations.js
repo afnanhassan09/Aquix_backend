@@ -202,11 +202,19 @@ async function calculateMetrics(pool, data) {
         val_ev_high_eur = `${val_high_rounded.toLocaleString('en-US')}k EUR`;
     }
 
+    // 14. FINANCIAL STRENGTH
+    let financial_strength = 0;
+    if (calc_ebit_margin_pct !== null && calc_rev_cagr_pct !== null && calc_volatility_pct !== null) {
+        financial_strength = (0.4 * calc_ebit_margin_pct) + (0.3 * calc_rev_cagr_pct) + (0.3 * (1 - calc_volatility_pct));
+        financial_strength = Math.round(financial_strength);
+    }
+
     return {
         calc_fx_rate, calc_rev_avg_eur, calc_ebit_avg_eur,
         calc_ebit_margin_pct, calc_ebit_cagr_pct, calc_volatility_pct, calc_rev_cagr_pct,
         factor_base_multiple, factor_country_risk, factor_size_adj, factor_conc_adj, factor_adj_multiple,
-        val_ev_low_eur, val_ev_mid_eur, val_ev_high_eur
+        val_ev_low_eur, val_ev_mid_eur, val_ev_high_eur,
+        financial_strength
     };
 }
 
@@ -269,7 +277,8 @@ router.post('/', async (req, res) => {
                 calc_fx_rate, calc_rev_avg_eur, calc_ebit_avg_eur,
                 calc_ebit_margin_pct, calc_ebit_cagr_pct, calc_volatility_pct, calc_rev_cagr_pct,
                 factor_base_multiple, factor_country_risk, factor_size_adj, factor_conc_adj, factor_adj_multiple,
-                val_ev_low_eur, val_ev_mid_eur, val_ev_high_eur
+                val_ev_low_eur, val_ev_mid_eur, val_ev_high_eur,
+                financial_strength
             )
             VALUES (
                 $1, $2, $3, $4, $5,
@@ -282,7 +291,7 @@ router.post('/', async (req, res) => {
                 $25, $26, $27,
                 $28, $29, $30, $31,
                 $32, $33, $34, $35, $36,
-                $37, $38, $39
+                $37, $38, $39, $40
             )
             RETURNING *;
         `;
@@ -299,7 +308,8 @@ router.post('/', async (req, res) => {
             metrics.calc_fx_rate, metrics.calc_rev_avg_eur, metrics.calc_ebit_avg_eur,
             metrics.calc_ebit_margin_pct, metrics.calc_ebit_cagr_pct, metrics.calc_volatility_pct, metrics.calc_rev_cagr_pct,
             metrics.factor_base_multiple, metrics.factor_country_risk, metrics.factor_size_adj, metrics.factor_conc_adj, metrics.factor_adj_multiple,
-            metrics.val_ev_low_eur, metrics.val_ev_mid_eur, metrics.val_ev_high_eur
+            metrics.val_ev_low_eur, metrics.val_ev_mid_eur, metrics.val_ev_high_eur,
+            metrics.financial_strength
         ];
 
 

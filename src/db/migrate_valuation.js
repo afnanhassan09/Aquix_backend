@@ -12,10 +12,10 @@ async function runMigration() {
 
     try {
         await client.connect();
-        console.log("Connected to database. Creating company_valuation_models table...");
+        console.log("Connected to database. Creating company_enterprise_valuation_models table...");
 
         const query = `
-            CREATE TABLE IF NOT EXISTS company_valuation_models (
+            CREATE TABLE IF NOT EXISTS company_enterprise_valuation_models (
                 id SERIAL PRIMARY KEY,
                 
                 -- 1. IDENTIFICATION
@@ -77,7 +77,7 @@ async function runMigration() {
         `;
 
         await client.query(query);
-        console.log("Table company_valuation_models created successfully.");
+        console.log("Table company_enterprise_valuation_models created successfully.");
 
     } catch (err) {
         console.error("Migration failed:", err);

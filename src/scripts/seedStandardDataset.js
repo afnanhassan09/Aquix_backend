@@ -10,26 +10,33 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-const filePath = "C:/Users/hassa/Downloads/3. Enterprise Version dataset_60 dataset_V2.xlsx";
+// UPDATED: File path for the Standard Version
+const filePath = "C:/Users/hassa/Downloads/2. Standard Version dataset_Jay's inputs_60 dataset_V2.xlsx";
 
 // ---------------------------------------------------------
 // 1. HEADERS TO IGNORE
 // ---------------------------------------------------------
-// These are the columns at the end of the sheet that are NOT companies
 const IGNORED_HEADERS = [
     'Primary Source',
     'Secondary / Validation Source',
     'Data Nature',
     'Notes',
-    'Model Reference Date'
+    'Model Reference Date',
+    'User Inputs',
+    'Blue Cells',
+    'Calculated Fields',
+    'Green Cells',
+    'Yellow Cells'
 ];
 
+// ---------------------------------------------------------
+// 2. METRIC MAP (Adapted for Standard Version)
+// ---------------------------------------------------------
 const METRIC_MAP = {
     // 1. IDENTIFICATION
     "Sector": "sector",
     "Country": "country_code",
     "Currency": "currency_code",
-    "Val Date": "valuation_date",
     "Employees": "employees",
 
     // 2. HISTORICAL FINANCIALS
@@ -48,49 +55,30 @@ const METRIC_MAP = {
     "EBIT F2": "ebit_f2",
     "EBIT F3": "ebit_f3",
 
-    // 4. FINANCIAL HEALTH
-    "Total Debt": "total_debt",
-    "Current Assets": "current_assets",
-    "Current Liabilities": "current_liabilities",
-    "Credit Rating": "credit_rating",
-    "Ownership %": "ownership_pct",
-    "Mgmt Turnover %": "mgmt_turnover_pct",
-    "Litigation?": "litigation_active",
-
-    // 5. RISK & OPERATIONS INPUTS
+    // 4. RISK & OPERATIONS INPUTS (Standard Version Specific)
     "Top-3 %": "top3_concentration_pct",
-    "Founder dep?": "founder_dependency_high",
-    "Supplier dep?": "supplier_dependency_high",
-    "Staff plan?": "key_staff_retention_plan",
-    "Audited?": "financials_audited",
-    "Documentation": "documentation_readiness",
-    "Flexibility?": "seller_flexibility",
-    "Timeline": "target_timeline_months"
+    "Founder dependency high?": "founder_dependency_high",
+    "Supplier dependency high?": "supplier_dependency_high",
+    "Key staff retention plan?": "key_staff_retention_plan",
+    "Documentation readiness": "documentation_readiness", // e.g., "Full", "Partial"
+    "Seller flexibility (earn-out/vendor finance)": "seller_flexibility", // e.g., "High", "Medium"
+    "Target timeline": "target_timeline_months"
 };
 
 /**
  * Parses Excel date serial numbers to 'YYYY-MM-DD'
- * Added Safety Check: Returns NULL if the value is not a valid date format.
  */
 function parseExcelDate(value) {
     if (!value) return null;
-
-    // Case A: Excel Serial Number (e.g., 45321)
     if (typeof value === 'number') {
         const excelBaseDate = new Date(1899, 11, 30);
         const date = new Date(excelBaseDate.getTime() + value * 24 * 60 * 60 * 1000);
         return date.toISOString().split('T')[0];
     }
-
-    // Case B: String date (e.g. "2024-09-30")
     if (typeof value === 'string') {
-        // If it contains "Reference Date" or isn't a date string, return null
-        if (value.length > 20 || isNaN(Date.parse(value))) {
-            return null;
-        }
+        if (value.length > 20 || isNaN(Date.parse(value))) return null;
         return value;
     }
-
     return null;
 }
 
@@ -115,13 +103,14 @@ async function seedData() {
     try {
         console.log('Reading Excel file...');
         const workbook = xlsx.readFile(filePath);
+        // Assuming data is on the first sheet
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
         // --- DYNAMIC HEADER FINDER ---
         let headerRowIndex = -1;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 30; i++) { // Increased search range slightly
             if (rawData[i] && rawData[i][0] === 'Metric') {
                 headerRowIndex = i;
                 console.log(`Found header "Metric" at row index ${i}`);
@@ -136,35 +125,32 @@ async function seedData() {
 
         const headerRow = rawData[headerRowIndex];
 
-        // --- REFINED COMPANY FINDER ---
+        // --- COMPANY COLUMN MAPPING ---
         const companyIndices = {};
         for (let i = 1; i < headerRow.length; i++) {
             const header = headerRow[i];
-
-            // Check if header exists, is a string, and IS NOT in our ignore list
-            if (header && typeof header === 'string') {
-                if (!IGNORED_HEADERS.includes(header)) {
-                    companyIndices[header] = i;
-                }
+            if (header && typeof header === 'string' && !IGNORED_HEADERS.includes(header)) {
+                // Trim potential whitespace
+                companyIndices[header.trim()] = i;
             }
         }
 
         const companyCount = Object.keys(companyIndices).length;
         console.log(`Found ${companyCount} companies.`);
 
-        if (companyCount !== 60) {
-            console.warn(`⚠️ WARNING: Expected 60 companies, but found ${companyCount}. Check the IGNORED_HEADERS list if this is incorrect.`);
-        }
-
         // Build Data Object
         const companiesData = {};
         Object.keys(companyIndices).forEach(comp => companiesData[comp] = {});
 
+        // Iterate through rows starting after the header
         for (let i = headerRowIndex + 1; i < rawData.length; i++) {
             const row = rawData[i];
-            const metricLabel = row[0];
+            // Safety check for empty rows
+            if (!row || row.length === 0) continue;
+            
+            const metricLabel = row[0] ? row[0].toString().trim() : null;
 
-            if (METRIC_MAP[metricLabel]) {
+            if (metricLabel && METRIC_MAP[metricLabel]) {
                 const sqlColumn = METRIC_MAP[metricLabel];
                 for (const [companyName, colIndex] of Object.entries(companyIndices)) {
                     let val = row[colIndex];
@@ -173,39 +159,50 @@ async function seedData() {
             }
         }
 
-        console.log('Starting DB Insertion...');
-        await client.query('BEGIN');
+        console.log('Starting DB Insertion via API...');
 
         for (const [companyName, data] of Object.entries(companiesData)) {
-            // Prepare payload for API
-            // The API expects keys like 'revenue_y1', etc. which we already have in `data`.
-            // We just need to ensure types match what the API expects.
-
+            // Construct Payload
             const payload = {
                 company_name: companyName,
                 ...data
             };
 
-            // Basic cleaning for API consumption
-            if (payload.valuation_date) payload.valuation_date = parseExcelDate(payload.valuation_date);
-
-            // Clean booleans and numbers for the payload
-            ['litigation_active', 'founder_dependency_high', 'supplier_dependency_high', 'key_staff_retention_plan', 'financials_audited'].forEach(k => {
+            // 1. Clean Booleans
+            const boolFields = [
+                'founder_dependency_high', 
+                'supplier_dependency_high', 
+                'key_staff_retention_plan'
+            ];
+            boolFields.forEach(k => {
                 if (payload[k] !== undefined) payload[k] = parseBoolean(payload[k]);
             });
 
-            // Clean numbers (remove commas)
+            // 2. Clean Numbers (remove commas, parse float)
+            // Exclude string fields from number parsing
+            const stringFields = [
+                'sector', 
+                'country_code', 
+                'currency_code', 
+                'documentation_readiness', 
+                'seller_flexibility', 
+                'company_name'
+            ];
+
             Object.keys(payload).forEach(k => {
-                if (typeof payload[k] === 'string' && !isNaN(parseFloat(payload[k].replace(/,/g, '')))) {
-                    if (!['sector', 'country_code', 'currency_code', 'credit_rating', 'documentation_readiness', 'seller_flexibility', 'company_name', 'valuation_date'].includes(k)) {
-                        payload[k] = cleanNumber(payload[k]);
+                if (!stringFields.includes(k) && typeof payload[k] === 'string') {
+                    // Check if it looks like a number
+                    const cleanVal = payload[k].replace(/,/g, '');
+                    if (!isNaN(parseFloat(cleanVal))) {
+                        payload[k] = parseFloat(cleanVal);
                     }
                 }
             });
 
-            // Send POST request to local API
+            // Send POST request
             try {
-                const response = await fetch('http://localhost:3000/api/enterprise-valuations', {
+                // Ensure the API endpoint handles the standard version schema (columns)
+                const response = await fetch('http://localhost:3000/api/standard-valuations', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -215,22 +212,18 @@ async function seedData() {
                     process.stdout.write('.');
                 } else {
                     const errText = await response.text();
-                    console.error(`\nFailed for ${companyName}: ${response.status} ${response.statusText} - ${errText}`);
+                    console.error(`\nFailed for ${companyName}: ${response.status} - ${errText}`);
                 }
             } catch (fetchErr) {
                 console.error(`\nError sending to API for ${companyName}:`, fetchErr.message);
             }
         }
 
-        console.log('\n✅ Seed process via API completed!');
+        console.log('\n✅ Standard Version seed process completed!');
 
     } catch (err) {
         console.error('\n❌ Seed failed:', err);
     }
-    // No need to close pool manually since we are using API, 
-    // but the script opened it at start. 
-    // We can actually remove the PG pool usage entirely if we only use API.
-    // However, I'll validly close it.
     await pool.end();
 }
 
