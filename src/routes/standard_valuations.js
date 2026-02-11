@@ -115,7 +115,6 @@ async function calculateMetrics(pool, data) {
         );
         if (sectorResult.rows.length > 0) {
             const row = sectorResult.rows[0];
-            console.log(row)
             factor_base_multiple = parseFloat(row.base_ebit_multiple);
             growth_score = parseInt(row.score || 0, 10);
 
@@ -318,31 +317,25 @@ async function calculateMetrics(pool, data) {
 
     // 18. DEALABILITY (SIZE) SUBSCORE
     // Input: Average EBIT (EUR) -> mapped to constant_deal_size_scores
-    let dealability_size_subscore = 40; // Default to lowest score
+    let dealability_size_subscore = 60; // Default if input is not lower than any threshold
     console.log("revenue_y1", revenue_y1);
     console.log("revenue_y2", revenue_y2);
     console.log("revenue_y3", revenue_y3);
-    const dealInput = (Number(revenue_y1) + Number(revenue_y2) + Number(revenue_y3)) / 3
+    const dealInput = calc_rev_avg_eur !== null ? calc_rev_avg_eur : ((Number(revenue_y1) + Number(revenue_y2) + Number(revenue_y3)) / 3);
 
     // Fetch thresholds (cached or fresh query)
     const dealSizeResult = await pool.query(
-        'SELECT ev_min_eur, size_score FROM constant_deal_size_scores ORDER BY ev_min_eur ASC'
+        'SELECT rev_min_eur, delta_multiple FROM constant_size_adjustments ORDER BY rev_min_eur ASC'
     );
 
-    // Standard "Band Min" lookup: Find the highest band the input exceeds
+    // Filter Logic: Find the first threshold where dealInput <= threshold
     for (const row of dealSizeResult.rows) {
-        const threshold = Number(row.ev_min_eur);
-        if (dealInput >= threshold) {
-            console.log("dealInput", dealInput);
-            console.log("threshold", threshold);
-            console.log("size_score", row.size_score);
-            dealability_size_subscore = parseInt(row.size_score, 10);
-        } else {
-            // Since rows are ordered ASC, once input < threshold, we stop
+        const threshold = Number(row.rev_min_eur);
+        if (dealInput <= threshold) {
+            dealability_size_subscore = parseFloat(row.delta_multiple) * 100;
             break;
         }
     }
-
     // 19. DEALABILITY (DOCUMENTATION) SUBSCORE
     // Formula: IF(documentation_readiness="Full",100,IF(documentation_readiness="Partial",50,0))
     let dealability_documentation_subscore = 0;
@@ -369,8 +362,14 @@ async function calculateMetrics(pool, data) {
     // 21. DEALABILITY (FLEXIBILITY) SUBSCORE
     // Formula: IF(seller_flexibility="Yes",100,0)
     let dealability_flexibility_subscore = 0;
-    if (seller_flexibility === 'Yes' || seller_flexibility === 'yes' || seller_flexibility === true) {
+    if (seller_flexibility === "High") {
         dealability_flexibility_subscore = 100;
+    }
+    else if (seller_flexibility == "Medium") {
+        dealability_flexibility_subscore = 50;
+    }
+    else {
+        dealability_flexibility_subscore = 0;
     }
 
     // 22. DEALABILITY SCORE (FINAL)
