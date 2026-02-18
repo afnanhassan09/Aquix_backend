@@ -607,4 +607,78 @@ router.post('/test-calculation', async (req, res) => {
     }
 });
 
+// POST /api/valuations/update-scores
+// Manually update scores for a specific company
+router.post('/update-scores', async (req, res) => {
+    try {
+        const {
+            company_name,
+            financial_strength,
+            growth_score,
+            risk_management,
+            data_completeness,
+            sector_context,
+            dealability_size_subscore,
+            dealability_documentation_subscore,
+            dealability_flexibility_subscore, // Maps to 'Market Appeal' or 'Flexibility'
+            dealability_timeline_subscore,
+            dealability_score,
+            risk_flags,
+            // confidence_band // Note: This column does not exist in the schema for standard valuations
+        } = req.body;
+
+        if (!company_name) {
+            return res.status(400).json({ error: 'Company name is required' });
+        }
+
+        // Check if company exists
+        const checkQuery = 'SELECT id FROM company_standard_valuation_models WHERE company_name = $1';
+        const checkResult = await pool.query(checkQuery, [company_name]);
+
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const updateQuery = `
+            UPDATE company_standard_valuation_models
+            SET
+                financial_strength = COALESCE($2, financial_strength),
+                growth_score = COALESCE($3, growth_score),
+                risk_management = COALESCE($4, risk_management),
+                data_completeness = COALESCE($5, data_completeness),
+                sector_context = COALESCE($6, sector_context),
+                dealability_size_subscore = COALESCE($7, dealability_size_subscore),
+                dealability_documentation_subscore = COALESCE($8, dealability_documentation_subscore),
+                dealability_flexibility_subscore = COALESCE($9, dealability_flexibility_subscore),
+                dealability_timeline_subscore = COALESCE($10, dealability_timeline_subscore),
+                dealability_score = COALESCE($11, dealability_score),
+                risk_flags = COALESCE($12, risk_flags)
+            WHERE company_name = $1
+            RETURNING *;
+        `;
+
+        const values = [
+            company_name,
+            financial_strength,
+            growth_score,
+            risk_management,
+            data_completeness,
+            sector_context,
+            dealability_size_subscore,
+            dealability_documentation_subscore,
+            dealability_flexibility_subscore,
+            dealability_timeline_subscore,
+            dealability_score,
+            risk_flags
+        ];
+
+        const result = await pool.query(updateQuery, values);
+        res.json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Error updating valuation scores:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
