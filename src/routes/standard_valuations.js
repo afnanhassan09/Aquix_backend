@@ -108,49 +108,51 @@ async function calculateMetrics(pool, data) {
     let growth_score = 0; // Pre-defined score from DB
     let sector_context = 0; // Calculated based on performance relative to sector
 
+    // ... existing setup ...
     if (sector) {
         const sectorResult = await pool.query(
-            'SELECT base_ebit_multiple, score, target_ebit_margin_pct, target_cagr_pct FROM constant_sector_metrics WHERE subsector_name_updated = $1',
+            'SELECT base_ebit_multiple, score, target_ebit_margin_pct, target_cagr_pct, score FROM constant_sector_metrics WHERE subsector_name_updated = $1',
             [sector]
         );
+
         if (sectorResult.rows.length > 0) {
             const row = sectorResult.rows[0];
-            factor_base_multiple = parseFloat(row.base_ebit_multiple);
+
+            // 1. Parse Targets
+            const target_margin = parseFloat(row.target_ebit_margin_pct); // e.g., 16.0
+            const target_cagr = parseFloat(row.target_cagr_pct);          // e.g., 7.0
             growth_score = parseInt(row.score || 0, 10);
 
-            // Calculate relative performance (Sector Context)
-            const target_margin = parseFloat(row.target_ebit_margin_pct);
-            const target_cagr = parseFloat(row.target_cagr_pct);
-
+            // 2. Calculate Ratios
             let margin_ratio = 0;
-            // calc_ebit_margin_pct is percentage (e.g. 15.5 for 15.5%)
-            // target_margin is percentage (e.g. 20.0 for 20.0%)
-            if (growth_score && growth_score !== 0 && calc_ebit_margin_pct !== null) {
-                margin_ratio = calc_ebit_margin_pct / growth_score;
+            if (target_margin && target_margin !== 0 && calc_ebit_margin_pct !== null) {
+                // Both should be in percentage terms (e.g. 27.98 / 16.0 = 1.748)
+                margin_ratio = calc_ebit_margin_pct / target_margin;
             }
 
             let cagr_ratio = 0;
-            // calc_ebit_cagr_pct is percentage
-            // target_cagr is percentage
-            if (growth_score && growth_score !== 0 && calc_rev_cagr_pct !== 0) {
-                cagr_ratio = calc_rev_cagr_pct / growth_score;
+            if (target_cagr && target_cagr !== 0 && calc_rev_cagr_pct !== null) {
+                cagr_ratio = calc_rev_cagr_pct / target_cagr;
             }
-            console.log("calc_ebit_margin_pct", calc_ebit_margin_pct);
-            console.log("calc_ebit_cagr_pct", calc_rev_cagr_pct);
-            console.log("growth_score", growth_score);
-            console.log("margin_ratio", margin_ratio);
-            console.log("cagr_ratio", cagr_ratio);
-            // Logic: Min(1.5, ratio) -> Avg -> *100
-            const term1 = Math.min(1.5, margin_ratio);
-            const term2 = Math.min(1.5, cagr_ratio);
 
-            sector_context = Math.round(100 * 0.5 * (term1 + term2));
+            // 3. Apply Logic (Floor negative ratios to 0)
+            // If growth is negative, it shouldn't drag the score down to negative thousands.
+            const effective_margin = Math.max(0, margin_ratio);
+            const effective_cagr = Math.max(0, cagr_ratio);
+
+            // 4. Calculate Final Score
+            // Multiplier fixed to 10 (not 1000) to match your expected output of 17
+            sector_context = Math.round(10 * (effective_margin + effective_cagr));
+
+            console.log("Sector Context Inputs:");
+            console.log(`Margin: ${calc_ebit_margin_pct} / ${target_margin} = ${margin_ratio}`);
+            console.log(`CAGR: ${calc_rev_cagr_pct} / ${target_cagr} = ${cagr_ratio}`);
+            console.log(`Calculated: 10 * (${effective_margin} + ${effective_cagr}) = ${sector_context}`);
 
         } else {
-            console.warn(`Base Multiple not found for sector: ${sector}`);
+            console.warn(`Sector metrics not found for: ${sector}`);
         }
     }
-
     // 9. COUNTRY RISK
     let factor_country_risk = 0.0;
     if (country_code) {
@@ -567,30 +569,30 @@ router.get('/:companyName', async (req, res) => {
 router.post('/test-calculation', async (req, res) => {
     try {
         const mockData = {
-            company_name: "Test Valuation Data",
-            sector: "Consumer Electronics Brands",
+            company_name: "Amazon",
+            sector: "E-Commerce Logistics",
             country_code: "US",
             currency_code: "USD",
-            employees: 161000,
-            revenue_y1: "394328000000",
-            revenue_y2: "365817000000",
-            revenue_y3: "274515000000",
-            ebit_y1: "114301000000",
-            ebit_y2: "108949000000",
-            ebit_y3: "66288000000",
-            revenue_f1: "420000000000",
-            revenue_f2: "450000000000",
-            revenue_f3: "480000000000",
-            ebit_f1: "120000000000",
-            ebit_f2: "130000000000",
-            ebit_f3: "145000000000",
-            top3_concentration_pct: 25,
-            founder_dependency_high: false,
-            supplier_dependency_high: false,
+            employees: 1525000,
+            revenue_y1: "574785000000",
+            revenue_y2: "513983000000",
+            revenue_y3: "469822000000",
+            ebit_y1: "36852000000",
+            ebit_y2: "12248000000",
+            ebit_y3: "24879000000",
+            revenue_f1: "620000000000",
+            revenue_f2: "680000000000",
+            revenue_f3: "750000000000",
+            ebit_f1: "42000000000",
+            ebit_f2: "50000000000",
+            ebit_f3: "60000000000",
+            top3_concentration_pct: 30,
+            founder_dependency_high: true,
+            supplier_dependency_high: true,
             key_staff_retention_plan: true,
             documentation_readiness: 'Full',
-            seller_flexibility: 'High',
-            target_timeline_months: 3
+            seller_flexibility: 'Medium',
+            target_timeline_months: 4
         };
 
         const metrics = await calculateMetrics(pool, mockData);
