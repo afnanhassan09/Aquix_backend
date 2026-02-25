@@ -920,4 +920,156 @@ router.post('/test-calculation', async (req, res) => {
     }
 });
 
+// Manually update scores for a specific company
+router.post('/update-scores', async (req, res) => {
+    try {
+        const {
+            company_name,
+
+            // Calculated Financials & Outputs
+            calc_fx_rate,
+            calc_rev_avg_eur,
+            calc_ebit_avg_eur,
+            calc_ebit_margin_pct,
+            calc_ebit_cagr_pct,
+            calc_volatility_pct,
+            calc_rev_cagr_pct,
+            calc_debt_ebitda_ratio,
+            calc_current_ratio,
+
+            // Factors
+            factor_base_multiple,
+            factor_country_risk,
+            factor_size_adj,
+            factor_conc_adj,
+            factor_adj_multiple,
+
+            // EVs
+            val_norm_ebit_eur,
+            val_ev_low_eur,
+            val_ev_mid_eur,
+            val_ev_high_eur,
+
+            // Scoring & Metrics
+            financial_strength,
+            risk_management,
+            market_context,
+            dealability_size_subscore,
+            dealability_documentation_subscore,
+            dealability_flexibility_subscore,
+            dealability_timeline_subscore,
+            dealability_score,
+            valuation_reliability,
+            fx_confidence,
+            peer_gap_pct,
+            age_warning,
+            inst_bonus,
+            risk_flags,
+            tapway_institutional_score
+        } = req.body;
+
+        if (!company_name) {
+            return res.status(400).json({ error: 'Company name is required' });
+        }
+
+        // Check if company exists
+        const checkQuery = 'SELECT id FROM company_enterprise_valuation_models WHERE company_name = $1';
+        const checkResult = await pool.query(checkQuery, [company_name]);
+
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const updateQuery = `
+            UPDATE company_enterprise_valuation_models
+            SET
+                calc_fx_rate = COALESCE($2, calc_fx_rate),
+                calc_rev_avg_eur = COALESCE($3, calc_rev_avg_eur),
+                calc_ebit_avg_eur = COALESCE($4, calc_ebit_avg_eur),
+                calc_ebit_margin_pct = COALESCE($5, calc_ebit_margin_pct),
+                calc_ebit_cagr_pct = COALESCE($6, calc_ebit_cagr_pct),
+                calc_volatility_pct = COALESCE($7, calc_volatility_pct),
+                calc_rev_cagr_pct = COALESCE($8, calc_rev_cagr_pct),
+                calc_debt_ebitda_ratio = COALESCE($9, calc_debt_ebitda_ratio),
+                calc_current_ratio = COALESCE($10, calc_current_ratio),
+                
+                factor_base_multiple = COALESCE($11, factor_base_multiple),
+                factor_country_risk = COALESCE($12, factor_country_risk),
+                factor_size_adj = COALESCE($13, factor_size_adj),
+                factor_conc_adj = COALESCE($14, factor_conc_adj),
+                factor_adj_multiple = COALESCE($15, factor_adj_multiple),
+                
+                val_norm_ebit_eur = COALESCE($16, val_norm_ebit_eur),
+                val_ev_low_eur = COALESCE($17, val_ev_low_eur),
+                val_ev_mid_eur = COALESCE($18, val_ev_mid_eur),
+                val_ev_high_eur = COALESCE($19, val_ev_high_eur),
+                
+                financial_strength = COALESCE($20, financial_strength),
+                risk_management = COALESCE($21, risk_management),
+                market_context = COALESCE($22, market_context),
+                dealability_size_subscore = COALESCE($23, dealability_size_subscore),
+                dealability_documentation_subscore = COALESCE($24, dealability_documentation_subscore),
+                dealability_flexibility_subscore = COALESCE($25, dealability_flexibility_subscore),
+                dealability_timeline_subscore = COALESCE($26, dealability_timeline_subscore),
+                dealability_score = COALESCE($27, dealability_score),
+                valuation_reliability = COALESCE($28, valuation_reliability),
+                fx_confidence = COALESCE($29, fx_confidence),
+                peer_gap_pct = COALESCE($30, peer_gap_pct),
+                age_warning = COALESCE($31, age_warning),
+                inst_bonus = COALESCE($32, inst_bonus),
+                risk_flags = COALESCE($33, risk_flags),
+                tapway_institutional_score = COALESCE($34, tapway_institutional_score)
+            WHERE company_name = $1
+            RETURNING *;
+        `;
+
+        const values = [
+            company_name,
+            calc_fx_rate,
+            calc_rev_avg_eur,
+            calc_ebit_avg_eur,
+            calc_ebit_margin_pct,
+            calc_ebit_cagr_pct,
+            calc_volatility_pct,
+            calc_rev_cagr_pct,
+            calc_debt_ebitda_ratio,
+            calc_current_ratio,
+
+            factor_base_multiple,
+            factor_country_risk,
+            factor_size_adj,
+            factor_conc_adj,
+            factor_adj_multiple,
+
+            val_norm_ebit_eur,
+            val_ev_low_eur,
+            val_ev_mid_eur,
+            val_ev_high_eur,
+
+            financial_strength,
+            risk_management,
+            market_context,
+            dealability_size_subscore,
+            dealability_documentation_subscore,
+            dealability_flexibility_subscore,
+            dealability_timeline_subscore,
+            dealability_score,
+            valuation_reliability,
+            fx_confidence,
+            peer_gap_pct,
+            age_warning,
+            inst_bonus,
+            risk_flags,
+            tapway_institutional_score
+        ];
+
+        const result = await pool.query(updateQuery, values);
+        res.json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Error updating valuation scores:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;

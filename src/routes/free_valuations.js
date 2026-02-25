@@ -430,4 +430,92 @@ router.post('/test-calculation', async (req, res) => {
     }
 });
 
+// Manually update scores for a specific company
+router.post('/update-scores', async (req, res) => {
+    try {
+        const {
+            company_name,
+
+            calc_fx_rate_to_eur,
+            calc_ebit_eur,
+            factor_base_ebit_multiple,
+            factor_country_risk,
+            factor_size_adj,
+            factor_conc_adj,
+            val_calc_adj_multiple,
+            val_ev_mid,
+            val_ev_mid_eur_k,
+            val_ev_low,
+            val_ev_low_eur_k,
+            val_ev_high,
+            val_ev_high_eur_k,
+            risk_comment,
+            plausibility_check,
+            acquisition_score
+        } = req.body;
+
+        if (!company_name) {
+            return res.status(400).json({ error: 'Company name is required' });
+        }
+
+        // Check if company exists
+        const checkQuery = 'SELECT id FROM company_free_valuation_models WHERE company_name = $1';
+        const checkResult = await pool.query(checkQuery, [company_name]);
+
+        if (checkResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const updateQuery = `
+            UPDATE company_free_valuation_models
+            SET
+                calc_fx_rate_to_eur = COALESCE($2, calc_fx_rate_to_eur),
+                calc_ebit_eur = COALESCE($3, calc_ebit_eur),
+                factor_base_ebit_multiple = COALESCE($4, factor_base_ebit_multiple),
+                factor_country_risk = COALESCE($5, factor_country_risk),
+                factor_size_adj = COALESCE($6, factor_size_adj),
+                factor_conc_adj = COALESCE($7, factor_conc_adj),
+                val_calc_adj_multiple = COALESCE($8, val_calc_adj_multiple),
+                val_ev_mid = COALESCE($9, val_ev_mid),
+                val_ev_mid_eur_k = COALESCE($10, val_ev_mid_eur_k),
+                val_ev_low = COALESCE($11, val_ev_low),
+                val_ev_low_eur_k = COALESCE($12, val_ev_low_eur_k),
+                val_ev_high = COALESCE($13, val_ev_high),
+                val_ev_high_eur_k = COALESCE($14, val_ev_high_eur_k),
+                risk_comment = COALESCE($15, risk_comment),
+                plausibility_check = COALESCE($16, plausibility_check),
+                acquisition_score = COALESCE($17, acquisition_score)
+            WHERE company_name = $1
+            RETURNING *;
+        `;
+
+        const values = [
+            company_name,
+            calc_fx_rate_to_eur,
+            calc_ebit_eur,
+            factor_base_ebit_multiple,
+            factor_country_risk,
+            factor_size_adj,
+            factor_conc_adj,
+            val_calc_adj_multiple,
+            val_ev_mid,
+            val_ev_mid_eur_k,
+            val_ev_low,
+            val_ev_low_eur_k,
+            val_ev_high,
+            val_ev_high_eur_k,
+            risk_comment,
+            plausibility_check,
+            acquisition_score
+        ];
+
+        const result = await pool.query(updateQuery, values);
+        res.json(result.rows[0]);
+
+    } catch (error) {
+        console.error('Error updating valuation scores:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
