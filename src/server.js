@@ -26,6 +26,7 @@ app.use('/api/query', queryRoutes);
 app.use('/api/enterprise-valuations', require('./routes/enterprise_valuations'));
 app.use('/api/standard-valuations', require('./routes/standard_valuations'));
 app.use('/api/free-valuations', require('./routes/free_valuations'));
+app.use('/api/ai', require('./routes/ai'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
